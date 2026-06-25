@@ -846,22 +846,22 @@ app:
 - [x] 8 Bengaluru zones with risk scores
 
 ### Phase 2 (Planned)
-- [x] Real-time WebSocket updates
-- [x] Advanced ML models (neural networks)
-- [x] Historical trend analysis
-- [x] Mobile app (React Native)
-- [x] SMS alerts (Twilio integration)
-- [x] Multi-city support
-- [x] Custom report generation (PDF)
-- [x] Admin dashboard with analytics
+- [ ] Real-time WebSocket updates
+- [ ] Advanced ML models (neural networks)
+- [ ] Historical trend analysis
+- [ ] Mobile app (React Native)
+- [ ] SMS alerts (Twilio integration)
+- [ ] Multi-city support
+- [ ] Custom report generation (PDF)
+- [ ] Admin dashboard with analytics
 
 ### Phase 3 (Future)
-- [x] IoT sensor integration
-- [x] Satellite imagery analysis
-- [x] Predictive modeling (7-day forecast)
-- [x] Community reporting features
-- [x] Integration with emergency services
-- [x] Multi-language support
+- [ ] IoT sensor integration
+- [ ] Satellite imagery analysis
+- [ ] Predictive modeling (7-day forecast)
+- [ ] Community reporting features
+- [ ] Integration with emergency services
+- [ ] Multi-language support
 
 ## 🤝 Contributing
 
