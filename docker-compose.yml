@@ -1,0 +1,81 @@
+# ===================================================================
+# ClimaLens :: Docker Compose
+# ===================================================================
+# Starts PostGIS 15 + PostGIS 3.4, Redis 7, and the Spring Boot app.
+#
+# Usage:
+#   docker compose up -d              # Start all services
+#   docker compose up -d postgis redis # Start infra only (dev mode)
+#   docker compose logs -f app        # Follow app logs
+# ===================================================================
+
+services:
+  # ============== PostgreSQL + PostGIS ==============
+  postgis:
+    image: postgis/postgis:15-3.4
+    container_name: climalens-postgis
+    restart: unless-stopped
+    ports:
+      - "${POSTGIS_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-climalens}"
+      POSTGRES_USER: "${POSTGRES_USER:-climalens}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-climalens}"
+    volumes:
+      - postgis-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-climalens} -d ${POSTGRES_DB:-climalens}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ============== Redis ==============
+  redis:
+    image: redis:7-alpine
+    container_name: climalens-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # ============== Spring Boot App ==============
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: climalens-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgis:5432/${POSTGRES_DB:-climalens}"
+      SPRING_DATASOURCE_USERNAME: "${POSTGRES_USER:-climalens}"
+      SPRING_DATASOURCE_PASSWORD: "${POSTGRES_PASSWORD:-climalens}"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: "${REDIS_PORT:-6379}"
+      WEATHERAPI_KEY: "${WEATHERAPI_KEY:-}"
+      OPENWEATHER_KEY: "${OPENWEATHER_KEY:-}"
+      TOMORROWIO_KEY: "${TOMORROWIO_KEY:-}"
+      NASA_KEY: "${NASA_KEY:-DEMO_KEY}"
+      JWT_SECRET: "${JWT_SECRET:-CHANGE_ME_IN_PRODUCTION_USE_AT_LEAST_256_BITS}"
+      SMTP_USERNAME: "${SMTP_USERNAME:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+    depends_on:
+      postgis:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgis-data:
+    name: climalens-postgis-data
+  redis-data:
+    name: climalens-redis-data

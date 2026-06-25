@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClimaLens - Hyperlocal Climate Risk Predictor</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+
+        #info-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 300px;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            max-height: 90vh;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .risk-score {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .risk-flood {
+            color: #2196F3;
+        }
+
+        .risk-heat {
+            color: #f44336;
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 30px;
+            left: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+
+    <div id="info-panel">
+        <h3>Zone Details</h3>
+        <div id="zone-info"></div>
+        <button onclick="closePanel()">Close</button>
+    </div>
+
+    <div class="legend">
+        <h4>Risk Level</h4>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #4CAF50;"></div>
+            <span>Low (0-30)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #FFC107;"></div>
+            <span>Moderate (31-60)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #FF9800;"></div>
+            <span>High (61-80)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #f44336;"></div>
+            <span>Extreme (81-100)</span>
+        </div>
+    </div>
+
+    <script>
+        // Initialize map centered on Bengaluru by default
+        const map = L.map('map').setView([12.9716, 77.5946], 12);
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Fetch and display risk scores for Bengaluru
+        async function loadRiskScores() {
+            try {
+                const response = await fetch('/api/v1/scores/current');
+                const scores = await response.json();
+
+                // Filter for Bengaluru zones only
+                const bengaluruScores = scores.filter(s => s.city === 'Bengaluru');
+
+                bengaluruScores.forEach(score => {
+                    // Create colored polygon based on risk level
+                    const maxRisk = Math.max(score.floodRiskScore, score.heatRiskScore);
+                    const color = getRiskColor(maxRisk);
+
+                    // Add marker at zone location
+                    L.circleMarker([score.lat, score.lon], {
+                        radius: 10,
+                        fillColor: color,
+                        color: '#000',
+                        weight: 1,
+                        opacity: 1,
+                        fillOpacity: 0.7
+                    }).addTo(map)
+                        .bindPopup(`
+                        <b>Zone:</b> ${score.zoneId}<br>
+                        <b>Flood Risk:</b> ${score.floodRiskScore}<br>
+                        <b>Heat Risk:</b> ${score.heatRiskScore}<br>
+                        <b>Scored At:</b> ${new Date(score.scoreTimestamp).toLocaleString()}
+                    `);
+                });
+            } catch (error) {
+                console.error('Error loading risk scores:', error);
+            }
+        }
+
+        function getRiskColor(score) {
+            if (score <= 30) return '#4CAF50'; // Green
+            if (score <= 60) return '#FFC107'; // Yellow
+            if (score <= 80) return '#FF9800'; // Orange
+            return '#f44336'; // Red
+        }
+
+        function closePanel() {
+            document.getElementById('info-panel').style.display = 'none';
+        }
+
+        // Load scores on map load
+        loadRiskScores();
+
+        // Refresh every 5 minutes
+        setInterval(loadRiskScores, 5 * 60 * 1000);
+    </script>
+</body>
+
+</html>

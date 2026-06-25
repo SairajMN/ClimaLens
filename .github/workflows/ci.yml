@@ -1,0 +1,138 @@
+# ===================================================================
+# ClimaLens :: Continuous Integration
+# ===================================================================
+# Runs on every push and pull request to main.
+# Builds the project, runs unit tests, and checks for secrets leakage.
+# ===================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths-ignore:
+      - 'README.md'
+      - 'TASK_TRACKER.md'
+      - '.env.example'
+      - 'docs/**'
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - 'README.md'
+      - 'TASK_TRACKER.md'
+      - '.env.example'
+      - 'docs/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------- Build & Test ----------
+  build:
+    name: Build & Test (Java 21)
+    runs-on: ubuntu-latest
+
+    services:
+      # PostGIS service for integration tests
+      postgis:
+        image: postgis/postgis:15-3.4
+        env:
+          POSTGRES_DB: climalens
+          POSTGRES_USER: climalens
+          POSTGRES_PASSWORD: climalens
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U climalens -d climalens"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --health-start-period 30s
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Compile and run tests
+        run: mvn verify -q -B -pl api -am
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/climalens
+          SPRING_DATASOURCE_USERNAME: climalens
+          SPRING_DATASOURCE_PASSWORD: climalens
+          WEATHERAPI_KEY: ${{ secrets.WEATHERAPI_KEY || '' }}
+          OPENWEATHER_KEY: ${{ secrets.OPENWEATHER_KEY || '' }}
+          TOMORROWIO_KEY: ${{ secrets.TOMORROWIO_KEY || '' }}
+          NASA_KEY: ${{ secrets.NASA_KEY || 'DEMO_KEY' }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: api/target/surefire-reports/
+          retention-days: 7
+
+  # ---------- Dependency Check (OWASP) ----------
+  security-audit:
+    name: Dependency Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'ClimaLens'
+          path: '.'
+          format: 'HTML'
+          out: 'reports'
+          args: >
+            --failOnCVSS 7
+            --suppression .dependency-check-suppressions.xml
+        continue-on-error: true
+
+      - name: Upload dependency check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: reports/
+          retention-days: 7
+
+  # ---------- Secrets Leakage Check ----------
+  secrets-scan:
+    name: Secrets Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: GitLeaks Scan
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
